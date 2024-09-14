@@ -1,0 +1,6 @@
+out/
+.git/
+.vs/
+build/
+build_debug/
+build_release/
