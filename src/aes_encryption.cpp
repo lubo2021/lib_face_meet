@@ -4,10 +4,16 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <openssl/md5.h>
+#include <sstream>
+#include <cstring>
+#include <ctime>
+#include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <cstring>
-
+#ifdef _WIN32
+#include <direct.h>
+#endif
 
 
 namespace face {
@@ -125,14 +131,9 @@ namespace face {
             abort();
         }
 
-        bool AesEncryption::check_authorization(const std::vector<unsigned char>& encryptedFirst,const std::vector<unsigned char>& encryptedSecond)
+        bool AesEncryption::check_authorization()
         {
-               std::string config_dir = AesEncryption::get_config_dir();
-#ifdef _WIN32
-            _mkdir(config_dir.c_str());
-#else
-            mkdir(config_dir.c_str(), 0755);
-#endif
+            std::string config_dir = AesEncryption::get_config_dir();
             std::string first_run_path = config_dir + "first_run.dat";
             std::string last_run_path = config_dir + "last_run.dat";
 
@@ -148,8 +149,12 @@ namespace face {
             if (encrypted_first.empty() || encrypted_last.empty()) {
                 std::vector<unsigned char> time_data(currentTimeStr.begin(), currentTimeStr.end());
                 std::vector<unsigned char> enc_time = encrypt(time_data);
-                AesEncryption::write_binary_file(first_run_path, enc_time);
-                AesEncryption::write_binary_file(last_run_path, enc_time);
+                if (!AesEncryption::write_binary_file(first_run_path, enc_time)) {
+                    return false;
+                }
+                if (!AesEncryption::write_binary_file(last_run_path, enc_time)) {
+                    return false;
+                }
                 return true;
             }
 
@@ -272,13 +277,13 @@ namespace face {
 #ifdef _WIN32
             const char* appdata = std::getenv("APPDATA");
             if (appdata) {
-                return std::string(appdata) + "\\mairuide\\rpa_robot\\";
+                return std::string(appdata) + "\\mairuide\\";
             }
             return ".\\";
 #else
             const char* home = std::getenv("HOME");
             if (home) {
-                return std::string(home) + "/.config/mairuide/rpa_robot/";
+                return std::string(home) + "/.config/mairuide/";
             }
             return "./";
 #endif
@@ -298,12 +303,26 @@ namespace face {
             return buffer;
         }
 
-        void AesEncryption::write_binary_file(const std::string& path, const std::vector<unsigned char>& data) {
+        bool AesEncryption::write_binary_file(const std::string& path, const std::vector<unsigned char>& data) {
+             if (data.empty()) {
+                return false;
+            }
+            std::string dir = path.substr(0, path.find_last_of("/\\"));
+            if (!dir.empty()) {
+#ifdef _WIN32
+                _mkdir(dir.c_str());
+#else
+                mkdir(dir.c_str(), 0755);
+#endif
+            }
             std::ofstream file(path, std::ios::binary | std::ios::trunc);
             if (!file.is_open()) {
-                return;
+                return false;
             }
-            file.write(reinterpret_cast<const char*>(data.data()), data.size());
+            if (!file.write(reinterpret_cast<const char*>(data.data()), data.size())) {
+                return false;
+            }
+            return true;
         }
     }
 }

@@ -22,7 +22,7 @@ namespace face {namespace meet {
 
             std::vector<unsigned char> get_key() { return key; };
             std::vector<unsigned char> get_iv() { return iv; };
-            bool check_authorization(const std::vector<unsigned char>& encryptedFirst,const std::vector<unsigned char>& encryptedSecond);
+            bool check_authorization();
             //字符串MD5加密并转16进制字符串
             static std::string str_md5_to_ox_str(const std::string& data);
 
@@ -37,7 +37,7 @@ namespace face {namespace meet {
             void handle_errors();
             static std::string get_config_dir();
             static std::vector<unsigned char> read_binary_file(const std::string& path);
-            static void write_binary_file(const std::string& path, const std::vector<unsigned char>& data);
+            static bool write_binary_file(const std::string& path, const std::vector<unsigned char>& data);
         };
     }
 }
