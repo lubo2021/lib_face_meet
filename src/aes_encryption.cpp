@@ -12,6 +12,19 @@
 
 namespace face {
     namespace meet {
+
+        AesEncryption::AesEncryption() 
+        {
+            key = { 0x12,0x67,0x98,0x02,0x02,0x45,0x28,0x12,
+                    0x67,0x98,0x02,0x81,0x19,0x34,0x45,0x02,
+                    0x49,0x02,0x45,0x12,0x67,0x98,0x73,0x32,
+                    0x02,0x56,0x91,0x02,0x45,0x12,0x67,0x98
+                 };
+
+            iv = { 0x98,0x02,0x58,0x45,0x68,0x62,0x81,0x39,
+                    0x08,0x35,0x19,0x27,0x01,0x38,0x13,0x57
+                };
+        }
         //字符串MD5加密并转16进制字符串
         std::string AesEncryption::str_md5_to_ox_str(const std::string& data) {
             EVP_MD_CTX* ctx = EVP_MD_CTX_new();
@@ -111,6 +124,74 @@ namespace face {
             ERR_print_errors_fp(stderr);
             abort();
         }
+
+        bool AesEncryption::check_authorization(const std::vector<unsigned char>& encryptedFirst,const std::vector<unsigned char>& encryptedSecond)
+        {
+               std::string config_dir = AesEncryption::get_config_dir();
+#ifdef _WIN32
+            _mkdir(config_dir.c_str());
+#else
+            mkdir(config_dir.c_str(), 0755);
+#endif
+            std::string first_run_path = config_dir + "first_run.dat";
+            std::string last_run_path = config_dir + "last_run.dat";
+
+            std::vector<unsigned char> encrypted_first = AesEncryption::read_binary_file(first_run_path);
+            std::vector<unsigned char> encrypted_last = AesEncryption::read_binary_file(last_run_path);
+ 
+            std::time_t currentTime = std::time(nullptr);
+            std::tm* tm_now = std::localtime(&currentTime);
+            char buf[32];
+            std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", tm_now);
+            std::string currentTimeStr(buf);
+
+            if (encrypted_first.empty() || encrypted_last.empty()) {
+                std::vector<unsigned char> time_data(currentTimeStr.begin(), currentTimeStr.end());
+                std::vector<unsigned char> enc_time = encrypt(time_data);
+                AesEncryption::write_binary_file(first_run_path, enc_time);
+                AesEncryption::write_binary_file(last_run_path, enc_time);
+                return true;
+            }
+
+            std::vector<unsigned char> decrypted_first = decrypt(encrypted_first);
+            std::vector<unsigned char> decrypted_last = decrypt(encrypted_last);
+
+            std::string first_str(decrypted_first.begin(), decrypted_first.end());
+            std::string last_str(decrypted_last.begin(), decrypted_last.end());
+
+            std::tm tm_first = {};
+            std::tm tm_last = {};
+            std::istringstream ss_first(first_str);
+            std::istringstream ss_last(last_str);
+            ss_first >> std::get_time(&tm_first, "%Y-%m-%dT%H:%M:%S");
+            ss_last >> std::get_time(&tm_last, "%Y-%m-%dT%H:%M:%S");
+
+            if (ss_first.fail() || ss_last.fail()) {
+                std::cerr << "Failed to parse date strings." << std::endl;
+                return false;
+            }
+
+            std::time_t firstRun = std::mktime(&tm_first);
+            std::time_t lastRun = std::mktime(&tm_last);
+
+            if (currentTime < lastRun) {
+                std::cerr << "System time has been rolled back!" << std::endl;
+                return false;
+            }
+
+            double diff_seconds = std::difftime(currentTime, firstRun);
+            long long days = static_cast<long long>(diff_seconds) / (60 * 60 * 24);
+            if (days > 180) {
+                std::cerr << "Trial period has expired." << std::endl;
+                return false;
+            }
+
+            std::vector<unsigned char> current_time(currentTimeStr.begin(), currentTimeStr.end());
+            AesEncryption::write_binary_file(last_run_path, encrypt(current_time));
+            return true;
+
+        }
+
         std::vector<unsigned char> AesEncryption::encrypt(const std::vector<unsigned char>& plaintext) {
             std::vector<unsigned char> ciphertext(plaintext.size() + AES_BLOCK_SIZE);
             EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -186,6 +267,43 @@ namespace face {
             ciphertext = encrypt(plaintext);
 
             return ciphertext;
+        }
+        std::string AesEncryption::get_config_dir() {
+#ifdef _WIN32
+            const char* appdata = std::getenv("APPDATA");
+            if (appdata) {
+                return std::string(appdata) + "\\mairuide\\rpa_robot\\";
+            }
+            return ".\\";
+#else
+            const char* home = std::getenv("HOME");
+            if (home) {
+                return std::string(home) + "/.config/mairuide/rpa_robot/";
+            }
+            return "./";
+#endif
+        }
+
+        std::vector<unsigned char> AesEncryption::read_binary_file(const std::string& path) {
+            std::ifstream file(path, std::ios::binary | std::ios::ate);
+            if (!file.is_open()) {
+                return {};
+            }
+            std::streamsize size = file.tellg();
+            file.seekg(0, std::ios::beg);
+            std::vector<unsigned char> buffer(static_cast<size_t>(size));
+            if (!file.read(reinterpret_cast<char*>(buffer.data()), size)) {
+                return {};
+            }
+            return buffer;
+        }
+
+        void AesEncryption::write_binary_file(const std::string& path, const std::vector<unsigned char>& data) {
+            std::ofstream file(path, std::ios::binary | std::ios::trunc);
+            if (!file.is_open()) {
+                return;
+            }
+            file.write(reinterpret_cast<const char*>(data.data()), data.size());
         }
     }
 }

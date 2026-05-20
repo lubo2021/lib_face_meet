@@ -7,7 +7,7 @@ using namespace face::meet;
 
 int main() {
     // 256 bit key
-    std::vector<unsigned char> key(32);
+    //std::vector<unsigned char> key(32);
     // 128 bit IV
     std::vector<unsigned char> iv(16);
 
