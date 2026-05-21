@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
+option(DISABLE_AUTHORIZATION_CHECK "Disable authorization check" OFF)
 
 set(SRC_LIST
     src/aes_encryption.cpp
@@ -20,6 +21,10 @@ target_include_directories(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC OpenSSL::Crypto)
+
+if(DISABLE_AUTHORIZATION_CHECK)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC DISABLE_AUTHORIZATION_CHECK)
+endif()
 
 if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /utf-8)

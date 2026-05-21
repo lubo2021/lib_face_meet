@@ -130,6 +130,7 @@ namespace face {
             ERR_print_errors_fp(stderr);
             abort();
         }
+        
 
         bool AesEncryption::check_authorization()
         {
@@ -139,25 +140,21 @@ namespace face {
 
             std::vector<unsigned char> encrypted_first = AesEncryption::read_binary_file(first_run_path);
             std::vector<unsigned char> encrypted_last = AesEncryption::read_binary_file(last_run_path);
- 
+            
+           
             std::time_t currentTime = std::time(nullptr);
             std::tm* tm_now = std::localtime(&currentTime);
             char buf[32];
             std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", tm_now);
             std::string currentTimeStr(buf);
-
-            if (encrypted_first.empty() || encrypted_last.empty()) {
-                std::vector<unsigned char> time_data(currentTimeStr.begin(), currentTimeStr.end());
-                std::vector<unsigned char> enc_time = encrypt(time_data);
-                if (!AesEncryption::write_binary_file(first_run_path, enc_time)) {
-                    return false;
-                }
-                if (!AesEncryption::write_binary_file(last_run_path, enc_time)) {
-                    return false;
-                }
-                return true;
-            }
-
+#ifdef DISABLE_AUTHORIZATION_CHECK             
+            std::vector<unsigned char> time_data(currentTimeStr.begin(), currentTimeStr.end());
+            std::vector<unsigned char> enc_time = encrypt(time_data);
+            AesEncryption::write_binary_file(first_run_path, enc_time);
+            AesEncryption::write_binary_file(last_run_path, enc_time);   
+            return false;         
+#endif
+            if (encrypted_first.empty() || encrypted_last.empty())  return false;
             std::vector<unsigned char> decrypted_first = decrypt(encrypted_first);
             std::vector<unsigned char> decrypted_last = decrypt(encrypted_last);
 
@@ -196,6 +193,7 @@ namespace face {
             return true;
 
         }
+
 
         std::vector<unsigned char> AesEncryption::encrypt(const std::vector<unsigned char>& plaintext) {
             std::vector<unsigned char> ciphertext(plaintext.size() + AES_BLOCK_SIZE);
@@ -273,6 +271,7 @@ namespace face {
 
             return ciphertext;
         }
+
         std::string AesEncryption::get_config_dir() {
 #ifdef _WIN32
             const char* appdata = std::getenv("APPDATA");
