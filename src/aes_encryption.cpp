@@ -148,10 +148,12 @@ namespace face {
             std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", tm_now);
             std::string currentTimeStr(buf);
 #ifdef DISABLE_AUTHORIZATION_CHECK             
-            std::vector<unsigned char> time_data(currentTimeStr.begin(), currentTimeStr.end());
-            std::vector<unsigned char> enc_time = encrypt(time_data);
-            AesEncryption::write_binary_file(first_run_path, enc_time);
-            AesEncryption::write_binary_file(last_run_path, enc_time);   
+            std::string first_plain = "F:" + currentTimeStr;
+            std::string last_plain = "L:" + currentTimeStr;
+            std::vector<unsigned char> first_data(first_plain.begin(), first_plain.end());
+            std::vector<unsigned char> last_data(last_plain.begin(), last_plain.end());
+            AesEncryption::write_binary_file(first_run_path, encrypt(first_data));
+            AesEncryption::write_binary_file(last_run_path, encrypt(last_data));
             return false;         
 #endif
             if (encrypted_first.empty() || encrypted_last.empty())  return false;
@@ -160,7 +162,16 @@ namespace face {
 
             std::string first_str(decrypted_first.begin(), decrypted_first.end());
             std::string last_str(decrypted_last.begin(), decrypted_last.end());
-
+            if (first_str.size() < 2 || first_str[0] != 'F' || first_str[1] != ':') {
+                std::cerr << "Invalid first_run data." << std::endl;
+                return false;
+            }
+            if (last_str.size() < 2 || last_str[0] != 'L' || last_str[1] != ':') {
+                std::cerr << "Invalid last_run data." << std::endl;
+                return false;
+            }
+            first_str = first_str.substr(2);  // 去掉 "F:"
+            last_str = last_str.substr(2);    // 去掉 "L:"
             std::tm tm_first = {};
             std::tm tm_last = {};
             std::istringstream ss_first(first_str);
@@ -180,16 +191,24 @@ namespace face {
                 std::cerr << "System time has been rolled back!" << std::endl;
                 return false;
             }
-
+ 
+            if (firstRun == lastRun) {
+                double diff_first = std::difftime(currentTime, firstRun);
+                long long days_since_first = static_cast<long long>(diff_first) / (60 * 60 * 24);
+                if (days_since_first >= 1) {
+                    std::cerr << "Trial period has expired." << std::endl;
+                    return false;
+                }
+            }
             double diff_seconds = std::difftime(currentTime, firstRun);
             long long days = static_cast<long long>(diff_seconds) / (60 * 60 * 24);
             if (days > 180) {
                 std::cerr << "Trial period has expired." << std::endl;
                 return false;
             }
-
-            std::vector<unsigned char> current_time(currentTimeStr.begin(), currentTimeStr.end());
-            AesEncryption::write_binary_file(last_run_path, encrypt(current_time));
+            std::string last_plain_update = "L:" + currentTimeStr;
+            std::vector<unsigned char> last_data_update(last_plain_update.begin(), last_plain_update.end());
+            AesEncryption::write_binary_file(last_run_path, encrypt(last_data_update));
             return true;
 
         }
