@@ -202,7 +202,7 @@ namespace face {
             }
             double diff_seconds = std::difftime(currentTime, firstRun);
             long long days = static_cast<long long>(diff_seconds) / (60 * 60 * 24);
-            if (days > 180) {
+            if (days > 15) {
                 std::cerr << "Trial period has expired." << std::endl;
                 return false;
             }
